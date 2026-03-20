@@ -8,10 +8,9 @@ Map 1 - Drone Coverage by Dock:
     - Max speed with standard obstacle avoidance: 35.8 mph / 16 m/s.
       → Used for DFR response: safe for urban navigation while maximizing coverage.
     - Startup time: under 40 seconds (spec). Deducted from the response window.
-    - DFR (Drone as First Responder) target: arrive on scene within 4 minutes of dispatch.
+    - DFR (Drone as First Responder) target: arrive on scene within 4 minutes of dispatch. (this time comes from a DFR study by Chula Vista Police Department (CVPD), one of the most cited programs of DFR in the United States)
     - Available travel time: 4 min − 40 s startup = 200 seconds.
     - Effective radius = 16 m/s × 200 s = 3,200 m = 3.2 km ≈ 2.0 miles.
-  All dock markers are the same small fixed size for precise location pinpointing.
 
 Map 2 - Incident Heatmap:
   A weighted heatmap using each dock's coordinates, weighted by the number of
@@ -170,7 +169,7 @@ def map_incident_heatmap(df, output_path=None, title="MetroSafe Incident Respons
 
     HeatMap(
         heat_data,
-        radius=35,
+        radius=50,
         blur=25,
         max_zoom=13,
         gradient={0.2: "#ffffcc", 0.4: "#fed976", 0.6: "#fd8d3c", 0.8: "#e31a1c", 1.0: "#800026"},
