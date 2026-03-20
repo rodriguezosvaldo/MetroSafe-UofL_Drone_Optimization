@@ -1,0 +1,6 @@
+# Dependencies for analysis (required by visualizations)
+pandas>=1.0.0
+
+# Visualization libraries
+plotly>=5.0.0
+folium>=0.14.0
