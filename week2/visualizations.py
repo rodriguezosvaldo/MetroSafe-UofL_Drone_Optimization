@@ -18,6 +18,8 @@ from analysis import (
     get_day_hour_crosstab,
     get_flights_by_location,
     get_drone_utilization_by_dock,
+    get_incidents_by_agency,
+    get_agency_dock_crosstab,
 )
 
 # Chart dimensions for PDF (inches)
@@ -175,6 +177,95 @@ def chart_flights_by_location(df):
     return path
 
 
+def chart_incidents_by_agency(df):
+    """Horizontal bar chart: Incidents by Responding Agency."""
+    data = get_incidents_by_agency(df)
+    n = len(data)
+    fig, ax = plt.subplots(figsize=(CHART_WIDTH, max(HORIZONTAL_BAR_HEIGHT, n * 0.35)))
+    y_pos = np.arange(n)
+    bars = ax.barh(y_pos, data.values, color='darkorange', edgecolor='saddlebrown', alpha=0.8)
+    ax.bar_label(bars, fontsize=BAR_LABEL_FONTSIZE, padding=2)
+    ax.set_yticks(y_pos)
+    ax.set_yticklabels([str(s)[:50] + ('...' if len(str(s)) > 50 else '') for s in data.index], fontsize=8)
+    ax.set_xlabel('Incidents')
+    ax.set_ylabel('Agencies')
+    ax.set_title('E. Incidents by Responding Agency')
+    ax.invert_yaxis()
+    plt.tight_layout()
+    path = _save_fig_to_temp(fig, 'incidents_agency')
+    return path
+
+
+def chart_agency_dock_heatmap(df):
+    """Heatmap: Agency-related incidents by dock location (docks x agencies)."""
+    ct = get_agency_dock_crosstab(df)
+    if ct.empty:
+        return None
+    if 'TOTAL' in ct.columns:
+        plot_data = ct.drop(columns=['TOTAL'])
+    else:
+        plot_data = ct
+    n_docks, n_agencies = plot_data.shape
+    fig_h = max(HEATMAP_HEIGHT, n_docks * 0.45)
+    fig_w = max(CHART_WIDTH, n_agencies * 1.1)
+    fig, ax = plt.subplots(figsize=(fig_w, fig_h))
+    im = ax.imshow(plot_data.values, cmap='Oranges', aspect='auto')
+    ax.set_xticks(np.arange(n_agencies))
+    ax.set_yticks(np.arange(n_docks))
+    ax.set_xticklabels(plot_data.columns, rotation=30, ha='right', fontsize=8)
+    ax.set_yticklabels([_shorten_address(r) for r in plot_data.index], fontsize=8)
+    ax.set_xlabel('Agencies')
+    ax.set_ylabel('Dock Location')
+    ax.set_title('Agency-Related Incidents by Dock Location')
+    for i in range(n_docks):
+        for j in range(n_agencies):
+            val = plot_data.iloc[i, j]
+            if val > 0:
+                ax.text(j, i, int(val), ha='center', va='center', fontsize=7,
+                        color='white' if val > plot_data.values.max() / 2 else 'black')
+    plt.colorbar(im, ax=ax, label='Incidents')
+    plt.tight_layout()
+    path = _save_fig_to_temp(fig, 'agency_dock')
+    return path
+
+
+def chart_agency_dock_heatmap_pct(df):
+    """Heatmap: Agency-related incidents as % of total incidents per dock."""
+    ct = get_agency_dock_crosstab(df)
+    if ct.empty:
+        return None
+    if 'TOTAL' in ct.columns:
+        totals = ct['TOTAL']
+        plot_data = ct.drop(columns=['TOTAL'])
+    else:
+        totals = ct.sum(axis=1)
+        plot_data = ct
+    # Compute row-wise percentages (% of each dock's total)
+    pct_data = plot_data.div(totals, axis=0).mul(100)
+    n_docks, n_agencies = pct_data.shape
+    fig_h = max(HEATMAP_HEIGHT, n_docks * 0.45)
+    fig_w = max(CHART_WIDTH, n_agencies * 1.1)
+    fig, ax = plt.subplots(figsize=(fig_w, fig_h))
+    im = ax.imshow(pct_data.values, cmap='Oranges', aspect='auto', vmin=0, vmax=100)
+    ax.set_xticks(np.arange(n_agencies))
+    ax.set_yticks(np.arange(n_docks))
+    ax.set_xticklabels(pct_data.columns, rotation=30, ha='right', fontsize=8)
+    ax.set_yticklabels([_shorten_address(r) for r in pct_data.index], fontsize=8)
+    ax.set_xlabel('Agencies')
+    ax.set_ylabel('Dock Location')
+    ax.set_title('Agency-Related Incidents by Dock Location (% of Dock Total)')
+    for i in range(n_docks):
+        for j in range(n_agencies):
+            val = pct_data.iloc[i, j]
+            if val > 0:
+                ax.text(j, i, f'{val:.1f}%', ha='center', va='center', fontsize=7,
+                        color='white' if val > 50 else 'black')
+    plt.colorbar(im, ax=ax, label='% of Dock Incidents')
+    plt.tight_layout()
+    path = _save_fig_to_temp(fig, 'agency_dock_pct')
+    return path
+
+
 def generate_all_charts(df):
     """Generate all charts and return list of (label, temp_path) for PDF insertion."""
     charts = []
@@ -183,6 +274,13 @@ def generate_all_charts(df):
         charts.append(('incidents_by_hour', chart_incidents_by_hour(df)))
         charts.append(('day_hour_heatmap', chart_day_hour_heatmap(df)))
         charts.append(('incidents_by_category', chart_incidents_by_category(df)))
+        charts.append(('incidents_by_agency', chart_incidents_by_agency(df)))
+        agency_dock_path = chart_agency_dock_heatmap(df)
+        if agency_dock_path:
+            charts.append(('agency_dock_heatmap', agency_dock_path))
+        agency_dock_pct_path = chart_agency_dock_heatmap_pct(df)
+        if agency_dock_pct_path:
+            charts.append(('agency_dock_heatmap_pct', agency_dock_pct_path))
         charts.append(('flights_by_location', chart_flights_by_location(df)))
         charts.append(('drone_utilization', chart_drone_utilization(df)))
     except Exception:

@@ -39,9 +39,48 @@ def get_incidents_by_hour(df):
     return df['Hour'].value_counts().sort_index()
 
 
+_NON_OPERATIONAL_LABEL = 'Non-operational (i.e. training flight)'
+
+# Case-insensitive exact values that collapse into the non-operational category
+_NON_OPERATIONAL_EXACT = {
+    'non-operational (i.e. training flight)',
+    'test',
+    'testing',
+    'training',
+    'training flight',
+    'test flight',
+}
+
+
+_SEARCH_RESCUE_LABEL = 'Search & rescue'
+
+# Exact values (case-insensitive, stripped) that collapse into Search & rescue
+_SEARCH_RESCUE_EXACT = {
+    'search & rescue',
+    'search & rescue, dispatch call for service',
+    'dispatch call for service, search & rescue',
+}
+
+
+def _normalize_incident_category(val):
+    """Merge training/test and search & rescue variants into canonical categories."""
+    s = str(val).strip()
+    sl = s.lower().replace('\r', '').replace('\n', ' ').strip()
+    # Non-operational merges
+    if sl in _NON_OPERATIONAL_EXACT:
+        return _NON_OPERATIONAL_LABEL
+    if sl.startswith('non-operational'):
+        return _NON_OPERATIONAL_LABEL
+    # Search & rescue merges
+    if sl in _SEARCH_RESCUE_EXACT:
+        return _SEARCH_RESCUE_LABEL
+    return s
+
+
 def get_incidents_by_category(df):
-    """Return incidents count per category."""
-    return df['Type of incident'].value_counts()
+    """Return incidents count per category, with training/test variants merged."""
+    normalized = df['Type of incident'].apply(_normalize_incident_category)
+    return normalized.value_counts()
 
 
 def get_day_hour_crosstab(df):
@@ -59,6 +98,52 @@ def get_flights_by_location(df):
 def get_drone_utilization_by_dock(df):
     """Return crosstab: dock (rows) x drone/vehicle (columns), values = takeoff count."""
     ct = pd.crosstab(df['Takeoff Address'], df['Vehicle'])
+    ct['TOTAL'] = ct.sum(axis=1)
+    return ct
+
+
+AGENCY_COL = 'Which agencies responded to this incident?'
+INCIDENT_ID_COL = 'Incident ID'
+
+
+def _infer_agency_from_incident_id(incident_id):
+    """Infer agency from Incident ID prefix when the agency field is blank.
+    Returns 'Fire' for LFD-prefixed IDs, 'Police' for LMPD-prefixed IDs,
+    or None if the prefix is not recognized."""
+    if pd.isna(incident_id):
+        return None
+    iid = str(incident_id).strip()
+    if iid.startswith('LFD'):
+        return 'Fire'
+    if iid.startswith('LMPD'):
+        return 'Police'
+    return None
+
+
+def _get_row_agency(row):
+    """Return the normalized agency label for a single row.
+    If the agency field is blank, falls back to Incident ID prefix inference.
+    Multi-agency combos are sorted alphabetically to merge order variants."""
+    val = row[AGENCY_COL]
+    if pd.isna(val) or str(val).strip() == '':
+        inferred = _infer_agency_from_incident_id(row.get(INCIDENT_ID_COL))
+        return inferred if inferred else 'Blank/Not Specified'
+    parts = sorted([a.strip() for a in str(val).split(',')])
+    return ', '.join(parts)
+
+
+def get_incidents_by_agency(df):
+    """Return incidents count per normalized responding agency, sorted descending."""
+    normalized = df.apply(_get_row_agency, axis=1)
+    return normalized.value_counts()
+
+
+def get_agency_dock_crosstab(df):
+    """Return crosstab: dock (rows) x normalized agency category (columns).
+    Uses the same normalized categories as get_incidents_by_agency so both
+    the bar chart and heatmap share identical category labels."""
+    normalized = df.apply(_get_row_agency, axis=1)
+    ct = pd.crosstab(df['Takeoff Address'], normalized)
     ct['TOTAL'] = ct.sum(axis=1)
     return ct
 
@@ -120,8 +205,17 @@ def run_report(output_buffer, add_chart_markers=False, df=None, title=None):
     for category, count in incidents_by_category.items():
         print(f"  {category:50s}: {count:3d} incidents", file=output_buffer)
     print(f"  {'Total':50s}: {incidents_by_category.sum():3d} incidents", file=output_buffer)
+
+    print("\nE. INCIDENTS BY RESPONDING AGENCY", file=output_buffer)
+    incidents_by_agency = get_incidents_by_agency(df)
+    for agency, count in incidents_by_agency.items():
+        print(f"  {str(agency):50s}: {count:3d} incidents", file=output_buffer)
+    print(f"  {'Total':50s}: {incidents_by_agency.sum():3d} incidents", file=output_buffer)
     if m:
         print("[CHART:incidents_by_category]", file=output_buffer)
+        print("[CHART:incidents_by_agency]", file=output_buffer)
+        print("[CHART:agency_dock_heatmap]", file=output_buffer)
+        print("[CHART:agency_dock_heatmap_pct]", file=output_buffer)
     print(file=output_buffer)
 
     if m:
