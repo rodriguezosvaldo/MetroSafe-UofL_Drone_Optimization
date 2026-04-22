@@ -27,7 +27,7 @@ from analysis import load_and_prepare_data
 
 # Effective response radius derived from Skydio X10 specs (see module docstring):
 #   16 m/s (max speed w/ standard OA) × 200 s (4 min − 40 s startup) = 3,200 m = 2.0 miles
-EFFECTIVE_RADIUS_M = 3200
+EFFECTIVE_RADIUS_M = 1280 #2 min
 
 # Fixed small marker radius in pixels for precise dock pinpointing
 DOCK_MARKER_RADIUS = 6

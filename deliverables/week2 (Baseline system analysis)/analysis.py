@@ -10,7 +10,7 @@ warnings.filterwarnings('ignore')
 
 # Default data path (CSV in project root)
 DAY_ORDER = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
-DEFAULT_DATA_PATH = Path(__file__).resolve().parent.parent / 'Dataflights.csv'
+DEFAULT_DATA_PATH = Path(__file__).resolve().parent.parent.parent / 'data' / 'Dataflights.csv'
 
 
 def load_and_prepare_data(csv_path=None):
