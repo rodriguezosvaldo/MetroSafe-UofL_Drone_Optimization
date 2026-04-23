@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 
 class Dock:
     def __init__(self, name, latitude, longitude, drone_speed, response_time):
@@ -30,3 +31,23 @@ def coverage_toy_example(dock, incident):
     print(f"Coverage: {dock.name} - {incident.incident_id} = {choice}")
     return choice
     
+
+
+def get_docks():
+    docks = []
+    docks_data = pd.read_csv('data/8_docks.xlsx')
+    for index, row in docks_data.iterrows():
+        dock = Dock(row['dock_name'], row['latitude'], row['longitude'], row['drone_speed'], row['response_time'])
+        docks.append(dock)
+        print(f"Dock {index} added")
+    return docks
+
+def get_incidents():
+    incidents = []
+    incidents_data = pd.read_csv('data/100_fire_incidents.csv')
+    for index, row in incidents_data.iterrows():
+        incident = Incident(row['inci_no'], row['latitude'], row['longitude'])
+        incidents.append(incident)
+        print(f"Incident {index} added")
+    return incidents
+
