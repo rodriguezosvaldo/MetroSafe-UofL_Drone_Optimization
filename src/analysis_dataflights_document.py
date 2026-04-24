@@ -10,7 +10,10 @@ warnings.filterwarnings('ignore')
 
 # Default data path (CSV in project root)
 DAY_ORDER = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
-DEFAULT_DATA_PATH = Path(__file__).resolve().parent.parent.parent / 'data' / 'Dataflights.csv'
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+DEFAULT_DATA_PATH = PROJECT_ROOT / 'data' / 'Dataflights.csv'
 
 
 def load_and_prepare_data(csv_path=None):
@@ -297,7 +300,10 @@ def _generate_pdf(output_text, chart_paths=None, pdf_filename='MetroSafe_Analysi
 
 
 if __name__ == '__main__':
-    from visualizations import generate_all_charts, cleanup_chart_files
+    from visualizations.visualizations_dataflights_document import (
+        generate_all_charts,
+        cleanup_chart_files,
+    )
 
     output_buffer = StringIO()
     original_stdout = sys.stdout
@@ -311,7 +317,9 @@ if __name__ == '__main__':
     charts = generate_all_charts(df)
     chart_paths = {key: path for key, path in charts}
 
-    pdf_path = Path(__file__).resolve().parent / 'MetroSafe_Analysis_Report.pdf'
+    output_dir = PROJECT_ROOT / 'output'
+    output_dir.mkdir(parents=True, exist_ok=True)
+    pdf_path = output_dir / 'MetroSafe_Analysis_Report.pdf'
     _generate_pdf(output_text, chart_paths, str(pdf_path))
 
     cleanup_chart_files([p for _, p in charts])

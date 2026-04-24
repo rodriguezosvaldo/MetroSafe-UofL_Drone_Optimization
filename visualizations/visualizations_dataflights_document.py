@@ -2,6 +2,7 @@
 MetroSafe Flight Analysis - Chart generation for PDF report.
 Generates bar charts and heatmaps for all statistics (matplotlib for PDF embedding).
 """
+import sys
 import tempfile
 from pathlib import Path
 
@@ -10,16 +11,20 @@ matplotlib.use('Agg')  # Non-interactive backend for PDF generation
 import matplotlib.pyplot as plt
 import numpy as np
 
-from analysis import (
-    load_and_prepare_data,
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from src.analysis_dataflights_document import (
+    get_agency_dock_crosstab,
+    get_day_hour_crosstab,
+    get_drone_utilization_by_dock,
+    get_flights_by_location,
+    get_incidents_by_agency,
+    get_incidents_by_category,
     get_incidents_by_day,
     get_incidents_by_hour,
-    get_incidents_by_category,
-    get_day_hour_crosstab,
-    get_flights_by_location,
-    get_drone_utilization_by_dock,
-    get_incidents_by_agency,
-    get_agency_dock_crosstab,
+    load_and_prepare_data,
 )
 
 # Chart dimensions for PDF (inches)
