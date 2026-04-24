@@ -2,8 +2,8 @@ import gurobipy as gp
 from docks_and_incidents import Incident, Dock
 from docks_and_incidents import coverage, coverage_toy_example
 
-test_incidents = [Incident(1, 1, 1), Incident(2, 2, 2), Incident(3, 3, 3), Incident(4, 4, 4), Incident(5, 5, 5), Incident(6, 6, 6), Incident(7, 7, 7), Incident(8, 8, 8), Incident(9, 9, 9), Incident(10, 10, 10)]
-test_docks = [Dock('A', 1, 1, 1, 1), Dock('B', 2, 2, 2, 2), Dock('C', 3, 3, 3, 3), Dock('D', 4, 4, 4, 4)]
+test_incidents = [Incident(1, 1, 1), Incident(2, 2, 2), Incident(3, 3, 3), Incident(4, 4, 4), Incident(5, 5, 5), Incident(6, 6, 6)]
+test_docks = [Dock('A', 1, 1, 1, 1), Dock('B', 2, 2, 2, 2), Dock('C', 3, 3, 3, 3)]
 
 # Maximize the number of incidents covered by the docks
 def maximize_incidents_covered(docks, incidents, dock_locations_quantity):

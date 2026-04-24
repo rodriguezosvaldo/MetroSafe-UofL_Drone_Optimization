@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import math
 
 class Dock:
     def __init__(self, name, latitude, longitude, drone_speed, response_time):
@@ -18,11 +19,18 @@ class Incident:
 
 
 def coverage(dock, incident):
-    EARTH_RADIUS = 3958.7603 # milles (Source: Wikipedia)
-    delta_latitude = np.radians(incident.latitude - dock.latitude)
-    delta_longitude = np.radians(incident.longitude - dock.longitude)
+    # Haversine formula 
+    # EARTH_RADIUS = 3958.7603 # milles (Source: Wikipedia)
+    # delta_latitude = np.radians(incident.latitude - dock.latitude)
+    # delta_longitude = np.radians(incident.longitude - dock.longitude)
+    # distance_dock_incident = 2 * EARTH_RADIUS * np.arcsin(np.sqrt(np.sin(delta_latitude / 2)**2 + np.cos(np.radians(dock.latitude)) * np.cos(np.radians(incident.latitude)) * np.sin(delta_longitude / 2)**2)) # Haversine formula
     
-    distance_dock_incident = 2 * EARTH_RADIUS * np.arcsin(np.sqrt(np.sin(delta_latitude / 2)**2 + np.cos(np.radians(dock.latitude)) * np.cos(np.radians(incident.latitude)) * np.sin(delta_longitude / 2)**2)) # Haversine formula
+    # Euclidean distance
+    delta_latitude_miles = np.abs(incident.latitude - dock.latitude)*69
+    mean_latitude = (incident.latitude + dock.latitude)/2
+    delta_longitude_miles = np.abs(incident.longitude - dock.longitude)*math.cos(mean_latitude)*69
+    distance_dock_incident = np.sqrt(delta_latitude_miles**2 + delta_longitude_miles**2)
+    
     return distance_dock_incident <= dock.effective_radius
 
 def coverage_toy_example(dock, incident):
@@ -31,13 +39,16 @@ def coverage_toy_example(dock, incident):
     print(f"Coverage: {dock.name} - {incident.incident_id} = {choice}")
     return choice
     
+# Drone speed and response time are constant values
+DRONE_SPEED = 16 # m/s
+RESPONSE_TIME = 1200 # seconds
 
-
+# Get docks and incidents from data
 def get_docks():
     docks = []
     docks_data = pd.read_csv('data/8_docks.xlsx')
     for index, row in docks_data.iterrows():
-        dock = Dock(row['dock_name'], row['latitude'], row['longitude'], row['drone_speed'], row['response_time'])
+        dock = Dock(row['dock_name'], row['latitude'], row['longitude'], DRONE_SPEED, RESPONSE_TIME)
         docks.append(dock)
         print(f"Dock {index} added")
     return docks
