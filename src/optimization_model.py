@@ -1,8 +1,8 @@
 import gurobipy as gp
-from docks_and_incidents import coverage, coverage_toy_example
-
-# test_incidents = [Incident(1, 1, 1), Incident(2, 2, 2), Incident(3, 3, 3), Incident(4, 4, 4), Incident(5, 5, 5), Incident(6, 6, 6)]
-# test_docks = [Dock('A', 1, 1, 1, 1), Dock('B', 2, 2, 2, 2), Dock('C', 3, 3, 3, 3)]
+from src.docks_and_incidents import coverage
+from visualizations.map import create_map
+from pathlib import Path
+import webbrowser
 
 # Maximize the number of incidents covered by the docks
 def maximize_incidents_covered(docks, incidents, dock_locations_quantity):
@@ -24,14 +24,10 @@ def maximize_incidents_covered(docks, incidents, dock_locations_quantity):
     # Optimize the model
     model.optimize()
 
-
-    # Results for toy example
-    print(f"Number of incidents covered: {model.ObjVal}")
-
-    for d in docks:
-        print(f"x[{d.name}] = {x[d].X}")
-
-    for i in incidents:
-        print(f"y[{i.incident_id}] = {y[i].X}")
-
-    
+    # New map with the optimized docks and incidents
+    selected_docks = [d for d in docks if x[d].X == 1]
+    covered_incidents = [i for i in incidents if y[i].X == 1]
+    create_map(selected_docks, covered_incidents, "optimized_map")
+    map_file = Path(__file__).resolve().parent.parent / "output/optimized_map.html"
+    if map_file.exists():
+        webbrowser.open(map_file.resolve().as_uri())

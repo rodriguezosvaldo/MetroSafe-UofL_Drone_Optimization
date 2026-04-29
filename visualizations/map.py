@@ -1,6 +1,7 @@
 import folium
+from src.docks_and_incidents import coverage
 
-def create_map(docks, incidents):
+def create_map(docks, incidents, map_name):
     try:
         map = folium.Map(
             location=[38.2527, -85.7585],
@@ -49,6 +50,42 @@ def create_map(docks, incidents):
                     max_width=100
                 ),
             ).add_to(map)
-        map.save('./output/map.html')
+
+        incidents_by_dock = {
+            dock.name: sum(1 for incident in incidents if coverage(dock, incident))
+            for dock in docks
+        }
+
+        dock_coverage_rows = "".join(
+            f"<li>{dock_name}: {incident_count}</li>"
+            for dock_name, incident_count in incidents_by_dock.items()
+        )
+        total_incidents_covered = sum(incidents_by_dock.values())
+
+        legend_html = f"""
+        <div style="
+            position: fixed;
+            bottom: 25px;
+            left: 25px;
+            z-index: 1000;
+            background-color: white;
+            border: 2px solid #666;
+            border-radius: 8px;
+            padding: 10px 12px;
+            font-size: 13px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            max-width: 320px;
+        ">
+            <div><b>Docks:</b> {len(docks)}</div>
+            <div><b>Incidents:</b> {len(incidents)}</div>
+            <div style="margin-top: 8px;"><b>Incidents Covered</b></div>
+            <ul style="margin: 4px 0 0 16px; padding: 0;">
+                {dock_coverage_rows}
+            </ul>
+            <div style="margin-top: 6px;"><b>Total:</b> {total_incidents_covered}</div>
+        </div>
+        """
+        map.get_root().html.add_child(folium.Element(legend_html))
+        map.save(f'./output/{map_name}.html')
     except Exception as e:
         print(f"Error creating map: {e}")

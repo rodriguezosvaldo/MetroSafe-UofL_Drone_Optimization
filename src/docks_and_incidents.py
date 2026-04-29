@@ -38,12 +38,6 @@ def coverage(dock, incident):
     
     return distance_dock_incident <= dock.effective_radius
 
-def coverage_toy_example(dock, incident):
-    import random
-    choice = random.choice([True, False])
-    print(f"Coverage: {dock.name} - {incident.incident_id} = {choice}")
-    return choice
-
 # Create docks and incidents objects from data
 def get_docks(excel_file_path):
     docks = []
