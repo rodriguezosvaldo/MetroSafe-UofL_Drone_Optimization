@@ -5,7 +5,7 @@ import webbrowser
 from pathlib import Path
 
 # CONSTANTS
-DOCK_LOCATIONS_QUANTITY = 5
+DOCK_LOCATIONS_QUANTITY = 2
 
 def create_docks_and_incidents():
     try:
