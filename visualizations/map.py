@@ -8,6 +8,25 @@ def create_map(docks, incidents, map_name):
             zoom_start=12,
             tiles="CartoDB Positron"
         )
+        for incident in incidents:
+            folium.CircleMarker(
+                location=[incident.latitude, incident.longitude],
+                radius=4,
+                color="#d62728",
+                weight=1,
+                fill=True,
+                fill_color="#d62728",
+                fill_opacity=0.9,
+                popup=folium.Popup(
+                    html=f"""
+                    <div style="padding-x:2px; white-space: nowrap;">
+                        {incident.incident_id}
+                    </div>
+                    """,
+                    max_width=100
+                ),
+            ).add_to(map)
+            
         for dock in docks:
             folium.Circle(
                 location=[dock.latitude, dock.longitude],
@@ -31,24 +50,6 @@ def create_map(docks, incidents, map_name):
                     max_width=200
                 ),
                 icon=folium.Icon(color="blue", icon="home", prefix="fa")
-            ).add_to(map)
-        for incident in incidents:
-            folium.CircleMarker(
-                location=[incident.latitude, incident.longitude],
-                radius=4,
-                color="#d62728",
-                weight=1,
-                fill=True,
-                fill_color="#d62728",
-                fill_opacity=0.9,
-                popup=folium.Popup(
-                    html=f"""
-                    <div style="padding-x:2px; white-space: nowrap;">
-                        {incident.incident_id}
-                    </div>
-                    """,
-                    max_width=100
-                ),
             ).add_to(map)
 
         incidents_by_dock = {

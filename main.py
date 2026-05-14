@@ -5,12 +5,12 @@ import webbrowser
 from pathlib import Path
 
 # CONSTANTS
-DOCK_LOCATIONS_QUANTITY = 2
+DOCK_LOCATIONS_QUANTITY = 4
 
 def create_docks_and_incidents():
     try:
         current_docks = get_docks('./data/8_docks.xlsx')
-        incidents = get_incidents('./data/57_fire_incidents.xlsx')
+        incidents = get_incidents('./data/32204_fire_incidents_no_duplicates.xlsx')
         create_map(current_docks, incidents, "map")
         map_file = Path(__file__).parent / "./output/map.html"
         if map_file.exists():
