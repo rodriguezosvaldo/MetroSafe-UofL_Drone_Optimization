@@ -4,8 +4,12 @@ from visualizations.map import create_map
 from pathlib import Path
 import webbrowser
 
+# CONSTANTS
+DOCK_LOCATIONS_QUANTITY = 4 # TODO: Implement this constant in the code
+
+
 # Maximize the number of incidents covered by the docks
-def maximize_incidents_covered(docks, incidents, dock_locations_quantity):
+def maximize_incidents_covered(docks, incidents):
     model = gp.Model("maximize_incidents_covered")
 
     # Add variables
@@ -16,7 +20,7 @@ def maximize_incidents_covered(docks, incidents, dock_locations_quantity):
     for i in incidents:
         model.addConstr(gp.quicksum(x[d] for d in docks if coverage(d, i)) >= y[i]) # At least one dock must cover the incident
 
-    model.addConstr(gp.quicksum(x[d] for d in docks) <= dock_locations_quantity) # The number of docks must be less than or equal to the number of dock locations available
+    model.addConstr(gp.quicksum(x[d] for d in docks) <= DOCK_LOCATIONS_QUANTITY) # The number of docks must be less than or equal to the number of dock locations available
     
     # Add objective function
     model.setObjective(gp.quicksum(y[i] for i in incidents), gp.GRB.MAXIMIZE) # Maximize the number of incidents covered

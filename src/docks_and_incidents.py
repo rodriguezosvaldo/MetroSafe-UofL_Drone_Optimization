@@ -56,3 +56,7 @@ def get_incidents(excel_file_path):
         incidents.append(incident)
     print(f"Incidents created: {len(incidents)}")
     return incidents
+
+
+def create_docks_and_incidents():
+    print("Creating docks and incidents...") # TODO: Implement this function

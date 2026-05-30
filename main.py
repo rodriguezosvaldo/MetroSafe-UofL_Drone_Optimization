@@ -1,24 +1,6 @@
-from src.docks_and_incidents import get_docks, get_incidents
+from src.docks_and_incidents import create_docks_and_incidents
 from src.optimization_model import maximize_incidents_covered
-from visualizations.map import create_map
-import webbrowser
-from pathlib import Path
 
-# CONSTANTS
-DOCK_LOCATIONS_QUANTITY = 4
-
-def create_docks_and_incidents():
-    try:
-        current_docks = get_docks('./data/8_docks.xlsx')
-        incidents = get_incidents('./data/32204_fire_incidents_no_duplicates.xlsx')
-        create_map(current_docks, incidents, "map")
-        map_file = Path(__file__).parent / "./output/map.html"
-        if map_file.exists():
-            webbrowser.open(map_file.resolve().as_uri())
-        return current_docks, incidents
-    except Exception as e:
-        print(f"Error creating docks and incidents: {e}")
-        return None, None
 
 def menu():
     while True:
@@ -38,7 +20,7 @@ def menu():
             try:
                 if current_docks is None or incidents is None:
                     raise Exception("Create docks and incidents first to run the optimization model")
-                maximize_incidents_covered(current_docks, incidents, DOCK_LOCATIONS_QUANTITY)
+                maximize_incidents_covered(current_docks, incidents)
             except Exception as e:
                 print("Be sure to create docks and incidents before running the optimization model")
                 print(f"Error running the optimization model: {e}")
