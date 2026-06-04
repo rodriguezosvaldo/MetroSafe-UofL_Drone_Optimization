@@ -1,6 +1,6 @@
 import gurobipy as gp
 from src.docks_and_incidents import coverage
-from visualizations.map import create_map
+from visualizations.map_incidents_and_docks import create_map
 from pathlib import Path
 import webbrowser
 
