@@ -1,7 +1,9 @@
 """
-High priority LMPD incidents visualization.
-Bar charts for LMPD incident distributions (month, hour, zip code).
-Data source: output/clean_and_geocoded_LMPD_data_2025.xlsx
+LMPD and JCPS location visualizations.
+Bar charts for LMPD incident distributions (month, hour, zip code) and JCPS schools by zip code.
+Data sources:
+  - output/clean_and_geocoded_LMPD_data_2025.xlsx
+  - output/clean_and_geocoded_JCPS_schools.xlsx
 """
 from __future__ import annotations
 import sys
@@ -15,6 +17,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 DEFAULT_DATA_PATH = PROJECT_ROOT / "output" / "clean_and_geocoded_LMPD_data_2025.xlsx"
+DEFAULT_JCPS_DATA_PATH = PROJECT_ROOT / "output" / "clean_and_geocoded_JCPS_schools.xlsx"
 FIGURES_DIR = PROJECT_ROOT / "output" / "figures"
 
 MONTH_LABELS = [
@@ -56,6 +59,17 @@ def load_lmpd_data(data_path: Path | str = DEFAULT_DATA_PATH) -> pd.DataFrame:
     return df
 
 
+def load_jcps_data(data_path: Path | str = DEFAULT_JCPS_DATA_PATH) -> pd.DataFrame:
+    """Load geocoded JCPS schools and ensure ``zip_code`` is present."""
+    path = Path(data_path)
+    df = pd.read_excel(path)
+    if "zip_code" not in df.columns:
+        raise KeyError(f"Expected column 'zip_code' in {path}")
+    df["zip_code"] = df["zip_code"].astype(str).str.strip()
+    df = df.loc[df["zip_code"].notna() & (df["zip_code"] != "") & (df["zip_code"] != "nan")].copy()
+    return df
+
+
 def _counts_by_month(df: pd.DataFrame) -> pd.Series:
     counts = df["date_occurred"].dt.month.value_counts()
     return counts.reindex(range(1, 13), fill_value=0).astype(int)
@@ -70,6 +84,21 @@ def _counts_by_zipcode(df: pd.DataFrame, top_n: int = TOP_ZIPCODES) -> pd.Series
     zips = df["zip_code"]
     counts = zips.value_counts(dropna=True)
     return counts.sort_values(ascending=False).head(top_n).astype(int)
+
+
+def lmpd_top_zipcodes(df_lmpd: pd.DataFrame, top_n: int = TOP_ZIPCODES) -> list[str]:
+    """Top LMPD zip codes by incident count, highest first (chart x-axis order)."""
+    return [str(z) for z in _counts_by_zipcode(df_lmpd, top_n=top_n).index]
+
+
+def _counts_for_zipcodes(df: pd.DataFrame, zipcodes: list[str]) -> pd.Series:
+    """Count rows per zip, fixed order; missing zips are 0."""
+    counts = df["zip_code"].astype(str).value_counts()
+    return pd.Series(
+        [int(counts.get(z, 0)) for z in zipcodes],
+        index=zipcodes,
+        dtype=int,
+    )
 
 
 def _y_axis_limit(max_count: int) -> tuple[float, float]:
@@ -110,10 +139,11 @@ def plot_incident_distribution(
     xlabel: str,
     x_tick_labels: list[str] | None = None,
     rotate_xticks: float = 0,
+    ylabel: str = "Total incidents",
     output_path: Path | str | None = None,
     show: bool = False,
 ) -> plt.Figure:
-    """Vertical bar chart matching LMPD distribution"""
+    """Vertical bar chart for count distributions."""
     labels = x_tick_labels if x_tick_labels is not None else [str(x) for x in counts.index]
     values = counts.values
 
@@ -128,7 +158,7 @@ def plot_incident_distribution(
     ax.set_xticks(range(len(labels)))
     ax.set_xticklabels(labels, rotation=rotate_xticks, ha="right" if rotate_xticks else "center")
     ax.set_xlabel(xlabel)
-    ax.set_ylabel("Total incidents")
+    ax.set_ylabel(ylabel)
     ax.set_title(title)
     _annotate_bars(ax, bars)
 
@@ -197,6 +227,27 @@ def chart_distribution_by_zipcode(
     )
 
 
+def chart_jcps_locations_by_zipcode(
+    df: pd.DataFrame,
+    zip_order: list[str],
+    output_path: Path | str | None = None,
+    show: bool = False,
+) -> plt.Figure:
+    """JCPS locations per zip, using the same zip codes and order as the LMPD chart."""
+    counts = _counts_for_zipcodes(df, zip_order)
+    n = len(zip_order)
+    return plot_incident_distribution(
+        counts,
+        title=f"JCPS Locations distribution by Zipcode (LMPD Top {n})",
+        xlabel="Zipcode",
+        x_tick_labels=[str(z) for z in zip_order],
+        rotate_xticks=45,
+        ylabel="Total locations",
+        output_path=output_path,
+        show=show,
+    )
+
+
 def generate_all_charts(
     data_path: Path | str = DEFAULT_DATA_PATH,
     figures_dir: Path | str = FIGURES_DIR,
@@ -222,5 +273,24 @@ def generate_all_charts(
     return paths
 
 
+def generate_jcps_charts(
+    data_path: Path | str = DEFAULT_JCPS_DATA_PATH,
+    lmpd_data_path: Path | str = DEFAULT_DATA_PATH,
+    figures_dir: Path | str = FIGURES_DIR,
+) -> dict[str, Path]:
+    """Build JCPS zip chart aligned to LMPD top zip codes (same order on x-axis)."""
+    jcps_df = load_jcps_data(data_path)
+    lmpd_df = load_lmpd_data(lmpd_data_path)
+    zip_order = lmpd_top_zipcodes(lmpd_df)
+    out_dir = Path(figures_dir)
+    path = out_dir / "jcps_locations_by_zipcode.png"
+    chart_jcps_locations_by_zipcode(jcps_df, zip_order, output_path=path)
+    print(f"Loaded {len(jcps_df):,} JCPS locations from {data_path}")
+    print(f"  Zip order from LMPD top {len(zip_order)}: {', '.join(zip_order)}")
+    print(f"  by_zipcode: {path}")
+    return {"by_zipcode": path}
+
+
 if __name__ == "__main__":
     generate_all_charts()
+    generate_jcps_charts()

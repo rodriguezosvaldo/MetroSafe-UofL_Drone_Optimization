@@ -1,19 +1,17 @@
 r"""Geocoding pipeline for the LMPD 2025 incidents dataset.
 
 Steps:
-    1. Read the source Excel file.
-    2. Clean ``block_address`` (remove the literal word ``BLOCK``) and build a
-       full ``clean_address`` column with the format
-       ``"<street>, <city>, <zip>, KY"``.
-    3. Deduplicate to avoid geocoding the same address many times.
-    4. Split unique addresses into Census Geocoder batch CSV files
+    1. Read the source file or accept a DataFrame (expects ``clean_address``,
+       ``clean_street``, ``city``, ``zip_code`` from ``data_preparation``).
+    2. Deduplicate to avoid geocoding the same address many times.
+    3. Split unique addresses into Census Geocoder batch CSV files
        (max 10,000 rows per batch).
-    5. POST each batch to the Census Geocoder ``addressbatch`` endpoint and
+    4. POST each batch to the Census Geocoder ``addressbatch`` endpoint and
        store the raw CSV responses (resumable: existing responses are reused).
-    6. Parse the responses, then merge ``latitude`` / ``longitude`` back into
+    5. Parse the responses, then merge ``latitude`` / ``longitude`` back into
        the original dataset on ``clean_address``.
-    7. Drop incidents without both ``latitude`` and ``longitude``.
-    8. Delete intermediate CSVs and Census batch/response files. Only the
+    6. Drop incidents without both ``latitude`` and ``longitude``.
+    7. Delete intermediate CSVs and Census batch/response files. Only the
        output Excel (with ``latitude`` and ``longitude``) remains on disk.
 
 """
@@ -21,7 +19,6 @@ Steps:
 from __future__ import annotations
 
 import argparse
-import re
 import sys
 import time
 from pathlib import Path
@@ -43,6 +40,9 @@ GEOCODED_UNIQUE_CSV = DATA_DIR / "unique_addresses_geocoded.csv"
 STATE = "KY"
 MAX_BATCH_SIZE = 10_000
 
+# Any dataset (LMPD, JCPS schools, etc.) must provide these columns before geocoding.
+GEOCODE_REQUIRED_COLUMNS = ("clean_address", "clean_street", "city", "zip_code")
+
 # Census Geocoder batch endpoint. ``locations`` is enough for lat/lon; switch to
 # ``geographies`` if census tracts/blocks are ever needed.
 CENSUS_URL = "https://geocoding.geo.census.gov/geocoder/locations/addressbatch"
@@ -61,10 +61,6 @@ CENSUS_RESPONSE_COLS = [
     "tigerline_id",
     "side",
 ]
-
-_BLOCK_RE = re.compile(r"\bBLOCK\b", re.IGNORECASE)
-_WS_RE = re.compile(r"\s+")
-
 
 def _ensure_dirs() -> None:
     for d in (DATA_DIR, OUTPUT_DIR, BATCHES_DIR, RESPONSES_DIR):
@@ -92,40 +88,38 @@ def _cleanup_geocoding_artifacts() -> None:
             pass
 
 
-def clean_street(value: object) -> str | None:
-    """Return ``block_address`` with the literal word ``BLOCK`` removed.
-
-    ``"2200 BLOCK BROWNSBORO RD"`` -> ``"2200 BROWNSBORO RD"``.
-    Returns ``None`` for missing/empty values.
-    """
-    if not isinstance(value, str):
-        return None
-    cleaned = _BLOCK_RE.sub("", value)
-    cleaned = _WS_RE.sub(" ", cleaned).strip(" ,;:.")
-    return cleaned or None
+def validate_geocode_columns(df: pd.DataFrame) -> None:
+    """Ensure ``df`` has the columns required for Census batch geocoding."""
+    missing = [c for c in GEOCODE_REQUIRED_COLUMNS if c not in df.columns]
+    if missing:
+        raise ValueError(
+            f"Dataset missing geocoding columns: {missing}. "
+            f"Required: {GEOCODE_REQUIRED_COLUMNS}. "
+            "Run the appropriate data_preparation cleaning function first."
+        )
 
 
-def build_full_address(
-    street: object, city: object, zip_code: object, state: str = STATE
-) -> str | None:
-    """Compose ``"<street>, <city>, <zip>, <state>"``; ``None`` if anything missing."""
-    parts = [street, city, zip_code, state]
-    if not all(isinstance(p, str) and p.strip() for p in parts):
-        return None
-    return ", ".join(str(p).strip() for p in parts)
+def _load_geocode_input(input_data: str | Path | pd.DataFrame) -> pd.DataFrame:
+    """Return a DataFrame from a path (Excel/CSV) or pass through an existing frame."""
+    if isinstance(input_data, pd.DataFrame):
+        return input_data.copy()
+    path = Path(input_data)
+    if not path.is_file():
+        raise FileNotFoundError(path)
+    suffix = path.suffix.lower()
+    if suffix in (".xlsx", ".xls"):
+        return pd.read_excel(path)
+    if suffix == ".csv":
+        return pd.read_csv(path)
+    raise ValueError(f"Unsupported input format: {path.suffix} (use .xlsx, .xls, or .csv)")
 
 
-def step_clean_and_dedup(input_xlsx: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Load the Excel, add ``clean_address``, and return ``(full_df, unique_df)``."""
-    print(f"[1/6] Reading {input_xlsx}")
-    df = pd.read_excel(input_xlsx)
+def step_clean_and_dedup(df: pd.DataFrame, source_label: str) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Validate geocode columns and return ``(full_df, unique_df)``."""
+    print(f"[1/6] Loading dataset: {source_label}")
     print(f"      rows loaded: {len(df):,}")
+    validate_geocode_columns(df)
 
-    df["clean_street"] = df["block_address"].map(clean_street)
-    df["clean_address"] = [
-        build_full_address(s, c, z)
-        for s, c, z in zip(df["clean_street"], df["city"], df["zip_code"])
-    ]
     usable = df["clean_address"].notna()
     n_usable = int(usable.sum())
     print(f"      rows with usable clean_address: {n_usable:,}")
@@ -297,29 +291,34 @@ def step_merge_back(
 
 
 def geocode_addresses(
-    input_xlsx: str | Path,
+    input_data: str | Path | pd.DataFrame,
     output_xlsx: str | Path = DEFAULT_OUTPUT_XLSX,
 ) -> pd.DataFrame:
-    """Run the full geocoding pipeline for ``input_xlsx`` and return the merged df.
+    """Run the full geocoding pipeline and return the merged dataframe.
 
     Parameters
     ----------
-    input_xlsx:
-        Path to the LMPD incidents Excel file to geocode.
+    input_data:
+        Cleaned dataset as a :class:`pandas.DataFrame`, or a path to Excel/CSV.
+        Must include ``clean_address``, ``clean_street``, ``city``, and
+        ``zip_code`` (produced by ``LMPD_data_cleaning`` or ``JCPS_data_cleaning``).
     output_xlsx:
         Path where the final geocoded Excel file will be written.
-        Defaults to ``output/LMPD_incidents_2025_geocoded.xlsx``.
     """
-    input_path = Path(input_xlsx)
     output_path = Path(output_xlsx)
+    if isinstance(input_data, pd.DataFrame):
+        source_label = f"DataFrame ({len(input_data):,} rows)"
+    else:
+        source_label = str(Path(input_data))
 
     _ensure_dirs()
 
     print("\n--- Geocoding (Census batch API) ---")
-    print(f"Input: {input_path}")
+    print(f"Input: {source_label}")
     print(f"Output: {output_path}")
 
-    df, unique = step_clean_and_dedup(input_path)
+    df = _load_geocode_input(input_data)
+    df, unique = step_clean_and_dedup(df, source_label)
     batch_paths = step_make_batches(unique)
     response_paths = step_submit_batches(batch_paths)
     resp = step_parse_responses(response_paths)
