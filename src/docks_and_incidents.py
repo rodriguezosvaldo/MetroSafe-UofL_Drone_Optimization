@@ -43,7 +43,7 @@ def get_docks(excel_file_path):
     docks = []
     docks_data = pd.read_excel(excel_file_path)
     for index, row in docks_data.iterrows():
-        dock = Dock(row['Address'], row['Latitude'], row['Longitude'], DRONE_SPEED, RESPONSE_TIME)
+        dock = Dock(row['clean_address'].split(",")[0].strip(), row['latitude'], row['longitude'], DRONE_SPEED, RESPONSE_TIME)
         docks.append(dock)
     print(f"Docks created: {len(docks)}")
     return docks
@@ -52,11 +52,14 @@ def get_incidents(excel_file_path):
     incidents = []
     incidents_data = pd.read_excel(excel_file_path)
     for index, row in incidents_data.iterrows():
-        incident = Incident(row['inci_no'], row['latitude'], row['longitude'])
+        incident = Incident(row['incident_number'], row['latitude'], row['longitude'])
         incidents.append(incident)
     print(f"Incidents created: {len(incidents)}")
     return incidents
 
 
-def create_docks_and_incidents():
-    print("Creating docks and incidents...") # TODO: Implement this function
+def create_docks_and_incidents(docks_excel_file_path, incidents_excel_file_path):
+    print("Creating docks and incidents...")
+    docks = get_docks(docks_excel_file_path)
+    incidents = get_incidents(incidents_excel_file_path)
+    return docks, incidents

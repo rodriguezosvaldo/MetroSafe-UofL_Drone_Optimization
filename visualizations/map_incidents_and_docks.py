@@ -27,6 +27,19 @@ def create_map(docks, incidents, map_name):
                 ),
             ).add_to(map)
             
+        incidents_by_dock = {
+            dock.name: sum(1 for incident in incidents if coverage(dock, incident))
+            for dock in docks
+        }
+        total_incidents = len(incidents)
+        covered_incidents = sum(
+            1 for incident in incidents
+            if any(coverage(dock, incident) for dock in docks)
+        )
+        covered_incidents_percentage = covered_incidents / total_incidents * 100
+        uncovered_incidents = total_incidents - covered_incidents
+        uncovered_incidents_percentage = uncovered_incidents / total_incidents * 100
+
         for dock in docks:
             folium.Circle(
                 location=[dock.latitude, dock.longitude],
@@ -38,30 +51,24 @@ def create_map(docks, incidents, map_name):
                 fill_opacity=0.10,
             ).add_to(map)
 
-            folium.Marker(
+            folium.CircleMarker(
                 location=[dock.latitude, dock.longitude],
+                radius=3,
+                color="#1f77b4",
+                fill=True,
+                fill_color="#1f77b4",
+                fill_opacity=1,
                 popup=folium.Popup(
                     html=f"""
                     <div style="padding-x:2px; white-space: nowrap;">
                         <b>{dock.name}</b><br>
-                        Effective Radius: {dock.effective_radius:.2f} miles
+                        Effective Radius: {dock.effective_radius:.2f} miles<br>
+                        Covered Incidents: {incidents_by_dock[dock.name]}
                     </div>
                     """,
                     max_width=200
                 ),
-                icon=folium.Icon(color="blue", icon="home", prefix="fa")
             ).add_to(map)
-
-        incidents_by_dock = {
-            dock.name: sum(1 for incident in incidents if coverage(dock, incident))
-            for dock in docks
-        }
-
-        dock_coverage_rows = "".join(
-            f"<li>{dock_name}: {incident_count}</li>"
-            for dock_name, incident_count in incidents_by_dock.items()
-        )
-        total_incidents_covered = sum(incidents_by_dock.values())
 
         legend_html = f"""
         <div style="
@@ -79,11 +86,8 @@ def create_map(docks, incidents, map_name):
         ">
             <div><b>Docks:</b> {len(docks)}</div>
             <div><b>Incidents:</b> {len(incidents)}</div>
-            <div style="margin-top: 8px;"><b>Incidents Covered</b></div>
-            <ul style="margin: 4px 0 0 16px; padding: 0;">
-                {dock_coverage_rows}
-            </ul>
-            <div style="margin-top: 6px;"><b>Total:</b> {total_incidents_covered}</div>
+            <div><b>Covered Incidents:</b> {covered_incidents} ({covered_incidents_percentage:.0f}%)</div>
+            <div><b>Uncovered Incidents:</b> {uncovered_incidents} ({uncovered_incidents_percentage:.0f}%)</div>
         </div>
         """
         map.get_root().html.add_child(folium.Element(legend_html))

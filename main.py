@@ -1,6 +1,10 @@
 from src.docks_and_incidents import create_docks_and_incidents
 from src.optimization_model import maximize_incidents_covered
+from visualizations.map_incidents_and_docks import create_map
 
+# CONSTANTS
+DOCKS_EXCEL_FILE_PATH = "output/clean_and_geocoded_JCPS_schools.xlsx"
+INCIDENTS_EXCEL_FILE_PATH = "output/clean_and_geocoded_LMPD_data_2025.xlsx"
 
 def menu():
     while True:
@@ -14,13 +18,14 @@ def menu():
         choice = input("\nEnter your choice: ")
 
         if choice == "1":
-            current_docks, incidents = create_docks_and_incidents()
+            docks, incidents = create_docks_and_incidents(DOCKS_EXCEL_FILE_PATH, INCIDENTS_EXCEL_FILE_PATH)
+            create_map(docks, incidents, "docks_and_incidents_map")
             continue
         elif choice == "2":
             try:
-                if current_docks is None or incidents is None:
+                if docks is None or incidents is None:
                     raise Exception("Create docks and incidents first to run the optimization model")
-                maximize_incidents_covered(current_docks, incidents)
+                maximize_incidents_covered(docks, incidents)
             except Exception as e:
                 print("Be sure to create docks and incidents before running the optimization model")
                 print(f"Error running the optimization model: {e}")
