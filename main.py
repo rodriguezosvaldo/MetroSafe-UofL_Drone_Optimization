@@ -25,7 +25,8 @@ def menu():
             try:
                 if docks is None or incidents is None:
                     raise Exception("Create docks and incidents first to run the optimization model")
-                maximize_incidents_covered(docks, incidents)
+                dock_locations_quantity = int(input("Enter the number of dock locations available: "))
+                maximize_incidents_covered(docks, incidents, dock_locations_quantity)
             except Exception as e:
                 print("Be sure to create docks and incidents before running the optimization model")
                 print(f"Error running the optimization model: {e}")
