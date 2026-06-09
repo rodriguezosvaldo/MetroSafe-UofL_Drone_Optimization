@@ -22,21 +22,15 @@ class Incident:
         self.latitude = latitude
         self.longitude = longitude
 
+def distance(dock, incident):
+    delta_latitude_miles = np.abs(incident.latitude - dock.latitude) * 69
+    mean_latitude = (incident.latitude + dock.latitude) / 2
+    delta_longitude_miles = np.abs(incident.longitude - dock.longitude) * math.cos(mean_latitude) * 69
+    return np.sqrt(delta_latitude_miles**2 + delta_longitude_miles**2)
+
 # Returns True if the incident is within the effective radius of the dock, False otherwise
 def coverage(dock, incident):
-    # Haversine formula 
-    # EARTH_RADIUS = 3958.7603 # milles (Source: Wikipedia)
-    # delta_latitude = np.radians(incident.latitude - dock.latitude)
-    # delta_longitude = np.radians(incident.longitude - dock.longitude)
-    # distance_dock_incident = 2 * EARTH_RADIUS * np.arcsin(np.sqrt(np.sin(delta_latitude / 2)**2 + np.cos(np.radians(dock.latitude)) * np.cos(np.radians(incident.latitude)) * np.sin(delta_longitude / 2)**2)) # Haversine formula
-    
-    # Euclidean formula
-    delta_latitude_miles = np.abs(incident.latitude - dock.latitude)*69
-    mean_latitude = (incident.latitude + dock.latitude)/2
-    delta_longitude_miles = np.abs(incident.longitude - dock.longitude)*math.cos(mean_latitude)*69
-    distance_dock_incident = np.sqrt(delta_latitude_miles**2 + delta_longitude_miles**2)
-    
-    return distance_dock_incident <= dock.effective_radius
+    return distance(dock, incident) <= dock.effective_radius
 
 # Create docks and incidents objects from data
 def get_docks(excel_file_path):
