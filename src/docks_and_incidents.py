@@ -16,11 +16,27 @@ class Dock:
         self.response_time = response_time
         self.effective_radius = self.drone_speed * self.response_time # miles
 
+    def incidents_covered(self, incidents):
+        covered_incidents = []
+        total_distance_to_covered_incidents = 0.0
+        for incident in incidents:
+            if coverage(self, incident):
+                covered_incidents.append(incident)
+                total_distance_to_covered_incidents += distance(self, incident)
+        return covered_incidents, total_distance_to_covered_incidents
+
 class Incident:
     def __init__(self, incident_id, latitude, longitude):
         self.incident_id = incident_id
         self.latitude = latitude
         self.longitude = longitude
+
+    def covered_by(self, docks):
+        covered_by = []
+        for dock in docks:
+            if coverage(dock, self):
+                covered_by.append(dock)
+        return covered_by
 
 def distance(dock, incident):
     delta_latitude_miles = np.abs(incident.latitude - dock.latitude) * 69
