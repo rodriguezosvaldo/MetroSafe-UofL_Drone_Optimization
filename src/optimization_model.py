@@ -14,11 +14,11 @@ def _precompute_coverage(docks, incidents):
     for i in incidents:
         incident_to_docks[i] = i.covered_by(docks)
     dock_to_incidents = {} # List of incidents that are covered by the dock
-    dock_distance_sum = 0.0 # Sum of the distances between the dock and the incidents it covers
+    dock_distance_sum = {}
     for d in docks:
         covered_incidents, total_distance_to_covered_incidents = d.incidents_covered(incidents)
         dock_to_incidents[d] = covered_incidents
-        dock_distance_sum += total_distance_to_covered_incidents
+        dock_distance_sum[d] = total_distance_to_covered_incidents
 
     return incident_to_docks, dock_to_incidents, dock_distance_sum
 
@@ -34,36 +34,20 @@ def _build_base_model(docks, incidents, dock_locations_quantity, incident_to_doc
     y = model.addVars(incidents, vtype=gp.GRB.BINARY, name="y")
 
     for i in incidents:
-        covering_docks = i.covered_by(docks)
+        covering_docks = incident_to_docks[i]
         if covering_docks:
             model.addConstr(gp.quicksum(x[d] for d in covering_docks) >= y[i]) # Each incident must be covered by at least one dock
         else:
             model.addConstr(y[i] == 0) # If an incident is not covered by any dock, it must be set to 0
 
     for d in docks:
-        coverable_incidents = d.incidents_covered(incidents)
+        coverable_incidents = dock_to_incidents[d]
         if coverable_incidents:
             model.addConstr(gp.quicksum(y[i] for i in coverable_incidents) <= _max_dock_coverage_capacity) # The number of incidents covered by a dock must be less than or equal to the maximum number of incidents a dock can cover
 
     model.addConstr(gp.quicksum(x[d] for d in docks) <= dock_locations_quantity) # The number of docks must be less than or equal to the number of dock locations available
     model.addConstr(gp.quicksum(y[i] for i in incidents) <= dock_locations_quantity * _max_dock_coverage_capacity) # Redundant constraint to ensure the number of incidents covered is less than or equal to the number of dock locations available multiplied by the maximum number of incidents a dock can cover
     return model, x, y
-
-    # for i in incidents:
-    #     covering_docks = incident_to_docks[i]
-    #     if covering_docks:
-    #         model.addConstr(gp.quicksum(x[d] for d in covering_docks) >= y[i]) # Each incident must be covered by at least one dock
-    #     else:
-    #         model.addConstr(y[i] == 0) # If an incident is not covered by any dock, it must be set to 0
-
-    # for d in docks:
-    #     coverable_incidents = dock_to_incidents[d]
-    #     if coverable_incidents:
-    #         model.addConstr(gp.quicksum(y[i] for i in coverable_incidents) <= _max_dock_coverage_capacity) # The number of incidents covered by a dock must be less than or equal to the maximum number of incidents a dock can cover
-
-    # model.addConstr(gp.quicksum(x[d] for d in docks) <= dock_locations_quantity) # The number of docks must be less than or equal to the number of dock locations available
-    # model.addConstr(gp.quicksum(y[i] for i in incidents) <= dock_locations_quantity * _max_dock_coverage_capacity) # Redundant constraint to ensure the number of incidents covered is less than or equal to the number of dock locations available multiplied by the maximum number of incidents a dock can cover
-    # return model, x, y
 
 def maximize_incidents_covered(docks, incidents, dock_locations_quantity):
     incident_to_docks, dock_to_incidents, dock_distance_sum = _precompute_coverage(docks, incidents)
@@ -91,6 +75,7 @@ def maximize_incidents_covered(docks, incidents, dock_locations_quantity):
         "coverage_rate": len(covered_incidents) / len(incidents),
         "docks_selected": len(selected_docks),
     }
+
     return results
     
 
