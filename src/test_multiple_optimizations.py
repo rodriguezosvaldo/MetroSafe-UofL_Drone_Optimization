@@ -1,4 +1,8 @@
 from src.optimization_model import maximize_incidents_covered
+from visualizations.charts_optimization_results import (
+    export_comparison_results,
+    export_scenario_results,
+)
 
 # MetroSafe current dock locations
 METROSAFE_DOCK_LOCATIONS = [
@@ -12,60 +16,94 @@ METROSAFE_DOCK_LOCATIONS = [
     "601 West Chestnut Street",
 ]
 
-def charts_tables():
-    return
-    
+
+def _union_covered_incidents(dock_list, incidents):
+    covered = set()
+    for dock in dock_list:
+        for incident in dock.incidents_covered(incidents)[0]:
+            covered.add(incident)
+    return covered
+
+
+def _append_result(results, entry):
+    if results:
+        entry["delta_coverage"] = entry["incidents_covered"] - results[-1]["incidents_covered"]
+    else:
+        entry["delta_coverage"] = entry["incidents_covered"]
+    results.append(entry)
+
+
 def no_fixed_locations(docks, incidents, k_min, k_max):
-    k_range = {
-        "k_min": k_min,
-        "k_max": k_max,
-    }
     results = []
-    for k in range(k_range["k_min"], k_range["k_max"]):
+    for k in range(k_min, k_max + 1):
         print(f"Running optimization test for k = {k}...")
         r = maximize_incidents_covered(docks, incidents, k)
         if r is None:
             continue
+        if r["incidents_covered"] == 0:
+            break
 
-        # Calculate delta coverage and break if it is 0
-        if results:
-            r["delta_coverage"] = r["incidents_covered"] - results[-1]["incidents_covered"]
-            if r["delta_coverage"] == 0:
-                results.append(r)
-                break
-        else:
-            r["delta_coverage"] = 0
-        
-        results.append(r)
-        
+        _append_result(results, r)
+        if results[-1]["delta_coverage"] == 0 and len(results) > 1:
+            break
+
     return results
+
 
 def fixed_locations(docks, incidents, k_max):
-    fixed_locations = [d for d in docks if d.name in METROSAFE_DOCK_LOCATIONS]
-    initial_incidents_coverage = sum(len(d.incidents_covered(incidents)[0]) for d in fixed_locations) # Number of incidents covered by the fixed locations
-    docks_remaining = [d for d in docks if d.name not in METROSAFE_DOCK_LOCATIONS] # Optimize the remaining docks
-    results = [
+    fixed_docks = [d for d in docks if d.name in METROSAFE_DOCK_LOCATIONS]
+    docks_remaining = [d for d in docks if d.name not in METROSAFE_DOCK_LOCATIONS]
+    fixed_covered = _union_covered_incidents(fixed_docks, incidents)
+
+    results = []
+    _append_result(
+        results,
         {
-            "k": len(fixed_locations),
-            "incidents_covered": initial_incidents_coverage,
-            "coverage_rate": initial_incidents_coverage / len(incidents),
-            "docks_selected": len(fixed_locations),
-            "delta_coverage": initial_incidents_coverage,
-        }
-    ]
-    for k in range(k_max):
-        r = maximize_incidents_covered(docks_remaining, incidents, k)
+            "k": len(fixed_docks),
+            "incidents_covered": len(fixed_covered),
+            "coverage_rate": len(fixed_covered) / len(incidents),
+            "amount_selected_docks": len(fixed_docks),
+            "selected_docks": fixed_docks,
+            "covered_incidents": list(fixed_covered),
+        },
+    )
+
+    for total_k in range(len(fixed_docks) + 1, k_max + 1):
+        additional_k = total_k - len(fixed_docks)
+        print(f"Running optimization test for {additional_k} additional dock(s) (total k = {total_k})...")
+        r = maximize_incidents_covered(docks_remaining, incidents, additional_k)
         if r is None:
             continue
-        
-        # Calculate delta coverage and break if it is 0
-        r["delta_coverage"] = r["incidents_covered"] - results[-1]["incidents_covered"]
-        if r["delta_coverage"] == 0:
-            results.append(r)
+
+        all_docks = fixed_docks + r["selected_docks"]
+        covered = _union_covered_incidents(all_docks, incidents)
+        entry = {
+            "k": total_k,
+            "incidents_covered": len(covered),
+            "coverage_rate": len(covered) / len(incidents),
+            "amount_selected_docks": len(all_docks),
+            "selected_docks": all_docks,
+            "covered_incidents": list(covered),
+        }
+        _append_result(results, entry)
+        if results[-1]["delta_coverage"] == 0:
             break
-        
-        results.append(r)
+
     return results
+
+
+def _validate_k_range(k_min, k_max):
+    if k_min > k_max:
+        print("The minimum number of docks must be less than or equal to the maximum.")
+        return False
+    if k_min < 1:
+        print("The minimum number of docks must be at least 1.")
+        return False
+    if k_max < 1:
+        print("The maximum number of docks must be at least 1.")
+        return False
+    return True
+
 
 def menu(docks, incidents):
     while True:
@@ -73,6 +111,7 @@ def menu(docks, incidents):
         print("---------------------------------------------------")
         print("1. Test optimizations with no fixed locations")
         print("2. Test optimizations starting from the 8 current MetroSafe dock locations")
+        print("3. Run both scenarios and compare")
         print("0. Exit")
         print("---------------------------------------------------")
         choice = input("\nEnter your choice: ")
@@ -80,26 +119,40 @@ def menu(docks, incidents):
         if choice == "1":
             k_min = int(input("Enter the number of docks to optimize in the first iteration: "))
             k_max = int(input("Enter the maximum number of docks to optimize: "))
-            if k_min > k_max:
-                print("The minimum number of docks to optimize must be less than the maximum number of docks to optimize")
+            if not _validate_k_range(k_min, k_max):
                 continue
-            if k_min < 0:
-                print("The minimum number of docks to optimize must be greater than 0")
-                continue
-            if k_max < 0:
-                print("The maximum number of docks to optimize must be greater than 0")
-                continue
-            no_fixed_locations(docks, incidents, k_min, k_max)
+            results = no_fixed_locations(docks, incidents, k_min, k_max)
+            export_scenario_results("no_fixed", results, incidents)
         elif choice == "2":
-            k_max = int(input("Enter the maximum number of docks to optimize: "))
-            if k_max < 8:
-                print("The maximum number of docks to optimize must be greater than 8")
+            k_max = int(input("Enter the maximum total number of docks (including the 8 fixed): "))
+            if k_max < len(METROSAFE_DOCK_LOCATIONS):
+                print(f"The maximum must be at least {len(METROSAFE_DOCK_LOCATIONS)} (current MetroSafe docks).")
                 continue
-            fixed_locations(docks, incidents, k_max)
+            results = fixed_locations(docks, incidents, k_max)
+            export_scenario_results("fixed_metrosafe", results, incidents)
+        elif choice == "3":
+            k_min = int(input("Enter the starting number of docks (no-fixed scenario): "))
+            k_max = int(input("Enter the maximum total number of docks: "))
+            if not _validate_k_range(k_min, k_max):
+                continue
+            if k_max < len(METROSAFE_DOCK_LOCATIONS):
+                print(f"The maximum must be at least {len(METROSAFE_DOCK_LOCATIONS)} for the fixed scenario.")
+                continue
+            results_no_fixed = no_fixed_locations(docks, incidents, k_min, k_max)
+            results_fixed = fixed_locations(docks, incidents, k_max)
+            export_scenario_results("no_fixed", results_no_fixed, incidents)
+            export_scenario_results("fixed_metrosafe", results_fixed, incidents)
+            export_comparison_results(
+                {
+                    "no_fixed": results_no_fixed,
+                    "fixed_metrosafe": results_fixed,
+                }
+            )
         elif choice == "0":
             break
         else:
             print("Invalid choice")
+
 
 def test_multiple_optimizations(docks, incidents):
     menu(docks, incidents)

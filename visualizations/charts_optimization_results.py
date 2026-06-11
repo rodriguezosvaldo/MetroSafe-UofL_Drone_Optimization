@@ -1,0 +1,226 @@
+"""
+Charts, tables, and map exports for multi-run dock optimization results.
+"""
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+import matplotlib
+
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+import pandas as pd
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from visualizations.map_incidents_and_docks import create_map
+
+FIGURES_DIR = PROJECT_ROOT / "output" / "figures"
+TABLES_DIR = PROJECT_ROOT / "output" / "tables"
+MAPS_DIR = PROJECT_ROOT / "output"
+
+FIG_SIZE = (10, 6)
+BAR_COLOR = "#1f77b4"
+LINE_COLOR = "#1f77b4"
+SCENARIO_COLORS = {
+    "no_fixed": "#1f77b4",
+    "fixed_metrosafe": "#ff7f0e",
+}
+SCENARIO_LABELS = {
+    "no_fixed": "No fixed locations",
+    "fixed_metrosafe": "8 MetroSafe docks fixed",
+}
+
+
+def _ensure_output_dirs() -> None:
+    FIGURES_DIR.mkdir(parents=True, exist_ok=True)
+    TABLES_DIR.mkdir(parents=True, exist_ok=True)
+    MAPS_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def results_to_dataframe(results: list[dict]) -> pd.DataFrame:
+    rows = []
+    for r in results:
+        rows.append(
+            {
+                "k": r["k"],
+                "incidents_covered": r["incidents_covered"],
+                "coverage_rate_pct": round(r["coverage_rate"] * 100, 2),
+                "delta_coverage": r.get("delta_coverage", 0),
+                "amount_selected_docks": r["amount_selected_docks"],
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def chart_incidents_covered_vs_k(
+    results: list[dict],
+    *,
+    scenario_name: str,
+    output_path: Path | None = None,
+) -> Path:
+    """Line chart: incidents covered vs k, with count and coverage % at each point."""
+    _ensure_output_dirs()
+    output_path = output_path or FIGURES_DIR / f"optimization_incidents_covered_{scenario_name}.png"
+
+    ks = [r["k"] for r in results]
+    covered = [r["incidents_covered"] for r in results]
+
+    fig, ax = plt.subplots(figsize=FIG_SIZE)
+    ax.plot(ks, covered, marker="o", color=LINE_COLOR, linewidth=2, markersize=8)
+    ax.set_xlabel("Number of docks (k)")
+    ax.set_ylabel("Incidents covered")
+    ax.set_title(f"Incidents Covered vs Number of Docks — {SCENARIO_LABELS.get(scenario_name, scenario_name)}")
+    ax.grid(True, alpha=0.3)
+
+    for r in results:
+        label = f"{r['incidents_covered']:,}\n({r['coverage_rate'] * 100:.1f}%)"
+        ax.annotate(
+            label,
+            (r["k"], r["incidents_covered"]),
+            textcoords="offset points",
+            xytext=(0, 10),
+            ha="center",
+            fontsize=8,
+        )
+
+    plt.tight_layout()
+    fig.savefig(output_path, dpi=150, bbox_inches="tight", facecolor="white")
+    plt.close(fig)
+    return output_path
+
+
+def chart_delta_coverage_vs_k(
+    results: list[dict],
+    *,
+    scenario_name: str,
+    output_path: Path | None = None,
+) -> Path:
+    """Bar chart: marginal coverage gain per k."""
+    _ensure_output_dirs()
+    output_path = output_path or FIGURES_DIR / f"optimization_delta_coverage_{scenario_name}.png"
+
+    ks = [r["k"] for r in results]
+    deltas = [r.get("delta_coverage", 0) for r in results]
+
+    fig, ax = plt.subplots(figsize=FIG_SIZE)
+    bars = ax.bar(ks, deltas, color=BAR_COLOR, edgecolor="navy", alpha=0.85, width=0.7)
+    ax.bar_label(bars, labels=[f"{d:,}" if d else "0" for d in deltas], fontsize=8, padding=2)
+    ax.set_xlabel("Number of docks (k)")
+    ax.set_ylabel("Additional incidents covered (delta)")
+    ax.set_title(f"Marginal Coverage Gain vs Number of Docks — {SCENARIO_LABELS.get(scenario_name, scenario_name)}")
+    ax.grid(True, axis="y", alpha=0.3)
+
+    plt.tight_layout()
+    fig.savefig(output_path, dpi=150, bbox_inches="tight", facecolor="white")
+    plt.close(fig)
+    return output_path
+
+
+def chart_scenario_comparison(
+    results_by_scenario: dict[str, list[dict]],
+    *,
+    output_path: Path | None = None,
+) -> Path:
+    """Overlaid line chart comparing incidents covered across scenarios."""
+    _ensure_output_dirs()
+    output_path = output_path or FIGURES_DIR / "optimization_scenario_comparison.png"
+
+    fig, ax = plt.subplots(figsize=FIG_SIZE)
+
+    for scenario_name, results in results_by_scenario.items():
+        if not results:
+            continue
+        ks = [r["k"] for r in results]
+        covered = [r["incidents_covered"] for r in results]
+        color = SCENARIO_COLORS.get(scenario_name, None)
+        label = SCENARIO_LABELS.get(scenario_name, scenario_name)
+        ax.plot(ks, covered, marker="o", linewidth=2, markersize=7, color=color, label=label)
+
+    ax.set_xlabel("Number of docks (k)")
+    ax.set_ylabel("Incidents covered")
+    ax.set_title("Scenario Comparison: Incidents Covered vs Number of Docks")
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    fig.savefig(output_path, dpi=150, bbox_inches="tight", facecolor="white")
+    plt.close(fig)
+    return output_path
+
+
+def export_results_table(
+    results: list[dict],
+    *,
+    scenario_name: str,
+    output_path: Path | None = None,
+) -> Path:
+    """Export optimization results to Excel."""
+    _ensure_output_dirs()
+    output_path = output_path or TABLES_DIR / f"optimization_results_{scenario_name}.xlsx"
+    df = results_to_dataframe(results)
+    df.to_excel(output_path, index=False, sheet_name="results")
+    return output_path
+
+
+def export_best_configuration_map(
+    results: list[dict],
+    incidents,
+    *,
+    scenario_name: str,
+    output_name: str | None = None,
+) -> Path | None:
+    """Create a map for the configuration with the highest incidents covered."""
+    _ensure_output_dirs()
+    if not results:
+        return None
+
+    best = max(results, key=lambda r: r["incidents_covered"])
+    selected_docks = best.get("selected_docks")
+    if not selected_docks:
+        return None
+
+    map_name = output_name or f"optimization_map_{scenario_name}_k{best['k']}"
+    create_map(selected_docks, incidents, map_name, all_incidents=incidents)
+    return MAPS_DIR / f"{map_name}.html"
+
+
+def export_scenario_results(
+    scenario_name: str,
+    results: list[dict],
+    incidents,
+) -> dict[str, Path]:
+    """Export all charts, table, and best-configuration map for one scenario."""
+    if not results:
+        print(f"No results to export for scenario '{scenario_name}'.")
+        return {}
+
+    paths = {
+        "incidents_chart": chart_incidents_covered_vs_k(results, scenario_name=scenario_name),
+        "delta_chart": chart_delta_coverage_vs_k(results, scenario_name=scenario_name),
+        "table": export_results_table(results, scenario_name=scenario_name),
+    }
+    map_path = export_best_configuration_map(results, incidents, scenario_name=scenario_name)
+    if map_path:
+        paths["map"] = map_path
+
+    print(f"\nExported results for '{SCENARIO_LABELS.get(scenario_name, scenario_name)}':")
+    for label, path in paths.items():
+        print(f"  {label}: {path}")
+
+    return paths
+
+
+def export_comparison_results(results_by_scenario: dict[str, list[dict]]) -> Path | None:
+    """Export overlaid scenario comparison chart."""
+    if len(results_by_scenario) < 2:
+        return None
+    if not any(results_by_scenario.values()):
+        return None
+
+    path = chart_scenario_comparison(results_by_scenario)
+    print(f"\nExported scenario comparison chart: {path}")
+    return path

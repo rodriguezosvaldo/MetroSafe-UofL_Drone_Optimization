@@ -68,12 +68,13 @@ def maximize_incidents_covered(docks, incidents, dock_locations_quantity):
     selected_docks = [d for d in docks if x[d].X > 0.5]
     covered_incidents = [i for i in incidents if y[i].X > 0.5]
 
-    # Get results
     results = {
         "k": dock_locations_quantity,
         "incidents_covered": len(covered_incidents),
         "coverage_rate": len(covered_incidents) / len(incidents),
-        "docks_selected": len(selected_docks),
+        "amount_selected_docks": len(selected_docks),
+        "selected_docks": selected_docks,
+        "covered_incidents": covered_incidents,
     }
 
     return results
