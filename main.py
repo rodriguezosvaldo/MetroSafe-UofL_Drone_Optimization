@@ -4,7 +4,7 @@ from visualizations.map_incidents_and_docks import create_map
 from src.optimization_tests import optimization_test
 
 # CONSTANTS
-DOCKS_EXCEL_FILE_PATH = "output/clean_and_geocoded_JCPS_schools.xlsx"
+DOCKS_EXCEL_FILE_PATH = "output/docks_JCPS_MetroSafe.xlsx"
 INCIDENTS_EXCEL_FILE_PATH = "output/clean_and_geocoded_LMPD_data_2025.xlsx"
 
 def menu():

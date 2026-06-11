@@ -53,7 +53,7 @@ def get_docks(excel_file_path):
     docks = []
     docks_data = pd.read_excel(excel_file_path)
     for index, row in docks_data.iterrows():
-        dock = Dock(row['clean_address'].split(",")[0].strip(), row['latitude'], row['longitude'], DRONE_SPEED, RESPONSE_TIME)
+        dock = Dock(row['name'], row['latitude'], row['longitude'], DRONE_SPEED, RESPONSE_TIME)
         docks.append(dock)
     print(f"Docks created: {len(docks)}")
     return docks

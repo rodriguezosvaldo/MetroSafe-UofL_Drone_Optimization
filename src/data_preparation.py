@@ -18,6 +18,8 @@ RAW_JCPS_CSV = PROJECT_ROOT / "data" / "RAW_Jefferson_County_KY_Schools.csv"
 
 LMPD_OUTPUT_XLSX = PROJECT_ROOT / "output" / "clean_and_geocoded_LMPD_data_2025.xlsx"
 JCPS_OUTPUT_XLSX = PROJECT_ROOT / "output" / "clean_and_geocoded_JCPS_schools.xlsx"
+DATAFLIGHTS_XLSX = PROJECT_ROOT / "data" / "Dataflights1.xlsx"
+DOCKS_JCPS_METROSAFE_XLSX = PROJECT_ROOT / "output" / "docks_JCPS_MetroSafe.xlsx"
 
 _BLOCK_RE = re.compile(r"\bBLOCK\b", re.IGNORECASE)
 _WS_RE = re.compile(r"\s+")
@@ -39,6 +41,14 @@ def normalize_text(value: object) -> str | None:
         return None
     text = str(value).strip()
     return text or None
+
+def address_street_only(value: object) -> str | None:
+    """Return the portion of an address before the first comma; ``None`` if missing."""
+    text = normalize_text(value)
+    if text is None:
+        return None
+    street = text.split(",", 1)[0].strip()
+    return street or None
 
 def normalize_zip_code(value: object) -> str | None:
     """Return a 5-digit ZIP string, or ``None`` if not usable."""
@@ -292,6 +302,61 @@ def prepare_jcps_pipeline() -> pd.DataFrame:
     cleaned = JCPS_data_cleaning(df)
     geocoded = run_geocoding(cleaned, JCPS_OUTPUT_XLSX, label="schools")
     return geocoded
+
+# This function builds the docks workbook joining the geocoded JCPS schools and Dataflights docks
+# Execute it by itself directly in the terminal:
+# python
+# from src.data_preparation import build_docks_jcps_metrosafe
+# build_docks_jcps_metrosafe()
+def build_docks_jcps_metrosafe(
+    jcps_xlsx: str | Path = JCPS_OUTPUT_XLSX,
+    dataflights_xlsx: str | Path = DATAFLIGHTS_XLSX,
+    output_xlsx: str | Path = DOCKS_JCPS_METROSAFE_XLSX,
+) -> pd.DataFrame:
+    """Build ``docks_JCPS_MetroSafe.xlsx`` from geocoded JCPS schools and Dataflights takeoffs."""
+    jcps_path = Path(jcps_xlsx)
+    dataflights_path = Path(dataflights_xlsx)
+    output_path = Path(output_xlsx)
+
+    print(f"\n--- Building docks workbook ---")
+    print(f"Reading JCPS schools: {jcps_path}")
+    jcps_df = pd.read_excel(jcps_path)
+    jcps_docks = pd.DataFrame(
+        {
+            "name": jcps_df["clean_address"].map(address_street_only),
+            "latitude": jcps_df["latitude"],
+            "longitude": jcps_df["longitude"],
+        }
+    )
+    print(f"JCPS dock rows loaded: {len(jcps_docks):,}")
+
+    print(f"Reading Dataflights takeoffs: {dataflights_path}")
+    flights_df = pd.read_excel(dataflights_path)
+    flights_docks = pd.DataFrame(
+        {
+            "name": flights_df["Takeoff Address"].map(address_street_only),
+            "latitude": flights_df["Takeoff Latitude"],
+            "longitude": flights_df["Takeoff Longitude"],
+        }
+    )
+    print(f"Dataflights dock rows loaded: {len(flights_docks):,}")
+
+    docks_df = pd.concat([jcps_docks, flights_docks], ignore_index=True)
+    n = len(docks_df)
+    docks_df = docks_df[
+        docks_df["name"].notna()
+        & docks_df["latitude"].notna()
+        & docks_df["longitude"].notna()
+    ]
+    print(
+        f"Rows without name/latitude/longitude removed: "
+        f"{n - len(docks_df):,} -> {len(docks_df):,} remaining"
+    )
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    docks_df.to_excel(output_path, index=False)
+    print(f"Final output: {output_path} ({len(docks_df):,} docks)\n")
+    return docks_df
 
 _DATASET_CHOICES = {
     "1": "lmpd",
